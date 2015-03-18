@@ -51,22 +51,14 @@ print r.json
 clusterType = "mesos"
 clusterName = "mesos_api_01"
 
-# Create a JSON file on-the-fly because this one won't work based on the BDE teams QE code
-# File is expected to be local, but BDE server doesn't have json library for Python :(
-jsonFile = "/tmp/spec.json"
-
 # Setup necessary bits for creating a new cluster
 header = {'content-type': 'application/json'}
-jsonFileRead = open(jsonFile)
-strObject = jsonFileRead.read()
-dicObject = eval(strObject)
 
-# This payload is not working because of gaps in REST API
-payload = {"name": clusterName, "type": "HDFS_MAPRED", "networkConfig": { "MGT_NETWORK": ["defaultNetwork"]}}
+payload = {"name": clusterName, "distro": clusterType, "networkConfig": { "MGT_NETWORK": ["defaultNetwork"]}}
 
 api_call = '/serengeti/api/clusters'
 url = prefix + bde_endpoint + port + api_call
-r = s.post(url, data=json.dumps(dicObject), headers=header, verify=False)
+r = s.post(url, data=json.dumps(payload), headers=header, verify=False)
 
 #DEBUG
 print
@@ -75,3 +67,4 @@ print r.json
 print
 print r.headers
 print r.text
+#/DEBUG

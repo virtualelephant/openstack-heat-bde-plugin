@@ -104,22 +104,22 @@ class BigDataExtensions(resource.Resource):
 
         # Authenticate in a requests.session to the BDE server
         prefix = 'https://'
-        postfix = ':8443/serengeti/api'
+        port = ':8443'
+        api_call = '/serengeti/j_spring_security_check'
         header = {'content-type': 'application/x-www-form-urlencoded'}
-        auth = 'j_spring_security_check'
         data = 'j_username=' + username + '&j_password=' + password
 
         # Setup the session
         s = requests.session()
-        url = prefix + bde_endpoint + postfix + auth
+        url = prefix + bde_endpoint + port + api_call
         r = s.post(url, data, headers=header, verify=False)
         logger.debug(_("Authentication status code %s") % r.json)
 
         # Now that we have authenticated, send REST API call
         header = {'content-type': 'application/json'}
-        command = 'api/clusters'
-        payload = {'name': name, 'type': type}
-        url = prefix + bde_endpoint + postfix + command
+        payload = {"name": clusterName, "distro": clusterType, "networkConfig": { "MGT_NETWORK": ["defaultNetwork"]}}
+        api_call = '/serengeti/api/clusters'
+        url = prefix + bde_endpoint + port + command
         r = s.post(url, data=json.dumps(payload), headers=header, verify=False)
         logger.debug(_("REST API call status code %s") % r.json)
 
