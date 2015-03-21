@@ -54,12 +54,9 @@ clusterState = "start"
 
 # Setup necessary bits for creating a new cluster
 header = {'content-type': 'application/json'}
-
-payload = {"state": clusterState}
-
-api_call = '/serengeti/api/cluster/' + clusterName
+api_call = '/serengeti/api/cluster/' + clusterName + '?state=' + clusterState
 url = prefix + bde_endpoint + port + api_call
-r = s.put(url, data=json.dumps(payload), headers=header, verify=False)
+r = s.put(url, headers=header, verify=False)
 
 #DEBUG
 print

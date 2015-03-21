@@ -50,13 +50,13 @@ print r.json
 # Variables that will be passed through Heat
 clusterType = "mesos"
 clusterName = "mesos_api_01"
-clusterState = "stop"
+clusterState = "delete"
 
 # Setup necessary bits for creating a new cluster
 header = {'content-type': 'application/json'}
-api_call = '/serengeti/api/cluster/' + clusterName + '?state=' + clusterState
+api_call = '/serengeti/api/cluster/' + clusterName
 url = prefix + bde_endpoint + port + api_call
-r = s.put(url, headers=header, verify=False)
+r = s.delete(url, headers=header, verify=False)
 
 #DEBUG
 print
