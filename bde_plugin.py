@@ -65,6 +65,11 @@ class BigDataExtensions(resource.Resource):
             _('The cluster type to deploy through BDE (Hadoop|Mesos|Storm|Kafka|Cassandra'),
             required=True
         ),
+        CLUSTER_NET: properties.Schema(
+            properties.Schema.STRING,
+            _('The network to deploy the cluster onto'),
+            required=True
+        ),
         CLUSTER_PASSWORD: properties.Schema(
             properties.Schema.STRING,
             _('The password to assign to the cluster nodes'),
@@ -103,15 +108,15 @@ class BigDataExtensions(resource.Resource):
         logger.debug(_("The cluster should be setup with the following %s") % _cluster_description)
 
         # Authenticate in a requests.session to the BDE server
+        header = {'content-type': 'application/x-www-form-urlencoded'}
         prefix = 'https://'
         port = ':8443'
-        api_call = '/serengeti/j_spring_security_check'
-        header = {'content-type': 'application/x-www-form-urlencoded'}
+        auth_string = "/serengeti/j_spring_security_check"
         data = 'j_username=' + username + '&j_password=' + password
 
         # Setup the session
         s = requests.session()
-        url = prefix + bde_endpoint + port + api_call
+        url = prefix + bde_endpoint + port + auth_string
         r = s.post(url, data, headers=header, verify=False)
         logger.debug(_("Authentication status code %s") % r.json)
 
@@ -119,25 +124,108 @@ class BigDataExtensions(resource.Resource):
         header = {'content-type': 'application/json'}
         payload = {"name": clusterName, "distro": clusterType, "networkConfig": { "MGT_NETWORK": ["defaultNetwork"]}}
         api_call = '/serengeti/api/clusters'
-        url = prefix + bde_endpoint + port + command
+        url = prefix + bde_endpoint + port + api_call
         r = s.post(url, data=json.dumps(payload), headers=header, verify=False)
         logger.debug(_("REST API call status code %s") % r.json)
 
         return
 
     def handle_suspend(self):
-        # Should be the call to power off the cluster through REST API
-        logger.debug(_("Suspend: Shutting down the cluster."))
+        # Call to shutdown the cluster through REST API
+        _bde_server = self._get_bde_server()
+        logger.debug(_("BDE management server %s") % _bde_server.list())
+
+        _cluster_description = {
+            'name': self.properties.get(self.CLUSTER_NAME)
+        } #/END _cluster_description
+        logger.debug(_("The %s cluster will be shutdown") % _cluster_description)
+
+        # Authenticate in a requests.session to the BDE server
+        header = {'content-type': 'application/x-www-form-urlencoded'}
+        prefix = 'https://'
+        port = ':8443'
+        auth_string = "/serengeti/j_spring_security_check"
+        data = 'j_username=' + username + '&j_password=' + password
+        clusterState = "stop"
+
+        # Setup session
+        s = requests.session()
+        url = prefix + bde_endpoint + port + auth_string
+        r = s.post(url, data, headers=header, verify=False)
+        logger.debug(_("Authentication status code %s") % r.json)
+
+        # REST API call to shutdown cluster
+        header = {'content-type': 'application/json'}
+        api_call = '/serengeti/api/cluster/' + clusterName + '?state=' + clusterState
+        url = prefix + bde_endpoint + port + api_call
+        r = s.put(url, headers=header, verify=False)
+        logger.debug(_("REST API stop call status code %s") % r.json)
+
         return
 
     def handle_resume(self):
-        # Should be the call to power on the cluster through REST API
-        logger.debug(_("Resume: Restarting the cluster."))
+        # Call to start the cluster through REST API
+        _bde_server = self._get_bde_server()
+        logger.debug(_("BDE management server %s") % _bde_server.list())
+
+        _cluster_description = {
+            'name': self.properties.get(self.CLUSTER_NAME)
+        } #/END _cluster_description
+
+        # Authenticate
+        header = {'content-type': 'application/x-www-form-urlencoded'}
+        prefix = 'https://'
+        port = ':8443'
+        auth_string = "/serengeti/j_spring_security_check"
+        data = 'j_username=' + username + '&j_password=' + password
+        clusterState = "start"
+
+        # Setup session
+        s = requests.session()
+        url = prefix + bde_endpoint + port + auth_string
+        r = s.post(url, data, headers=header, verify=False)
+        logger.debug(_("Authentication status code %s") % r.json)
+
+        # REST API call to start cluster
+        header = {'content-type': 'application/json'}
+        payload = {"state": clusterState}
+        api_call = '/serengeti/api/cluster/' + clusterName
+        url = prefix + bde_endpoint + port + api_call
+        r = s.put(url, data=json.dumps(payload), headers=header, verify=False)
+        logger.debug(_("REST API start call status code %s") % r.json)
+
         return
 
     def handle_delete(self):
-        # Should be the call to delete the cluster through REST API
-        logger.debug(_("Delete: Deleting the cluster."))
+        # Call to delete the cluster through REST API
+        _bde_server = self._get_bde_server()
+        logger.debug(_("BDE management server %s") % _bde_server.list())
+
+        _cluster_description = {
+            'name': self.properties.get(self.CLUSTER_NAME)
+        } #/END _cluster_description
+
+        # Authenticate
+        header = {'content-type': 'application/x-www-form-urlencoded'}
+        prefix = 'https://'
+        port = ':8443'
+        auth_string = "/serengeti/j_spring_security_check"
+        data = 'j_username=' + username + '&j_password=' + password
+
+        # Setup session
+        s = requests.session()
+        url = prefix + bde_endpoint + port + auth_string
+        r = s.post(url, data, headers=header, verify=False)
+        logger.debug(_("Authentication status code %s") % r.json)
+
+        # REST API call to delete cluster
+        header = {'content-type': 'application/json'}
+        api_call = '/serengeti/api/cluster/' + clusterName
+        url = prefix + bde_endpoint + port + api_call
+        r = s.delete(url, headers=header, verify=False)
+        logger.debug(_("REST API delete call status code %s") % r.json)
+        
+
         return
 
 def resource_mapping():
