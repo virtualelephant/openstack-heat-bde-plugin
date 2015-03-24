@@ -29,10 +29,10 @@ class BigDataExtensions(resource.Resource):
 
     PROPERTIES = (
         BDE_ENDPOINT, USERNAME, PASSWORD,
-        CLUSTER_NAME, CLUSTER_TYPE, CLUSTER_PASSWORD
+        CLUSTER_NAME, CLUSTER_TYPE, CLUSTER_NET, CLUSTER_PASSWORD
     ) = (
         'bde_endpoint', 'username', 'password',
-        'cluster_name', 'cluster_type', 'cluster_password'
+        'cluster_name', 'cluster_type', 'cluster_net', 'cluster_password'
     )
 
     properties_schema = {

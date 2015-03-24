@@ -69,7 +69,7 @@
             }
         },
         "Mesosphere-Cell-0" : {
-            "Type" : "Project::Atom::BigDataExtensions",
+            "Type" : "VirtualElephant::BigDataExtensions",
             "Properties" : {
                 "bde_endpoint" : "bde.localdomain",
                 "username" : "administrator@vsphere.local",
