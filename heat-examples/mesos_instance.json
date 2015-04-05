@@ -1,0 +1,81 @@
+{
+    "AWSTemplateFormatVersion" : "2010-09-09",
+    "Description" : "Create and provision a Mesos cluster using OpenStack Heat resource plugin.",
+    "Resources" : {
+        "mesos_network_01" : {
+            "Type" : "OS::Neutron::Net",
+            "Properties" : {
+                "name" : "mesos_network_01"
+            }
+        },
+        "mesos_subnet_01" : {
+            "Type" : "OS::Neutron::Subnet",
+            "Properties" : {
+                "name" : "mesos_subnet_01",
+                "cidr" : "172.20.2.0/21",
+                "dns_nameservers" : ["10.27.56.31", "10.27.56.32"],
+                "enable_dhcp" : "True",
+                "gateway_ip" : "172.20.1.254",
+                "network_id" : { "Ref" : "mesos_network_01" }
+            }
+        },
+        "mesos_router_01" : {
+            "Type" : "OS::Neutron::Router",
+            "Properties" : {
+                "admin_state_up" : "True",
+                "name" : "mesos_router_01"
+            }
+        },
+        "mesos_router_01_gw" : {
+            "Type" : "OS::Neutron::RouterGateway",
+            "Properties" : {
+                "network_id" : "212744c1-aca9-44ee-9827-4b762a1bb074",
+                "router_id" : { "Ref" : "mesos_router_01" }
+            }
+        },
+        "mesos_router_01_int0" : {
+            "Type" : "OS::Neutron::RouterInterface",
+            "Properties" : {
+                "router_id" : { "Ref" : "mesos_router_01" },
+                "subnet_id" : { "Ref" : "mesos_subnet_01" }
+            }
+        },
+        "instance0_port0" : {
+            "Type" : "OS::Neutron::Port",
+            "Properties" : {
+                "admin_state_up" : "True",
+                "network_id" : { "Ref" : "mesos_network_01" }
+            }
+        },
+        "instance0_floatingip" : {
+            "Type" : "OS::Neutron::FloatingIP",
+            "Properties" : {
+                "floating_network_id" : "212744c1-aca9-44ee-9827-4b762a1bb074",
+                "port_id" : { "Ref" : "instance0_port0" }
+            }
+        },
+        "instance0": {
+            "Type" : "OS::Nova::Server",
+            "Properties" : {
+                "name" : "mesos-instance-01",
+                "image" : "02420cbe-72c3-41e5-9836-89456c29414c",
+                "flavor" : "m1.small",
+                "networks" : [{
+                    "port" : { "Ref" : "instance0_port0" }
+                }]
+            }
+        },
+        "Mesosphere-Cell-0" : {
+            "Type" : "VirtualElephant::VMware::BDE",
+            "Properties" : {
+                "bde_endpoint" : "bde.atom.ut1.cpt.adobe.net",
+                "vcm_server" : "vcm1.atom.ut1.cpt.adobe.net",
+                "username" : "administrator@vsphere.local",
+                "password" : "SpringBokJ#9",
+                "cluster_name" : "mesos_heat_api_02",
+                "cluster_type" : "mesos",
+                "cluster_net" : { "Ref" : "mesos_network_01" }
+            }
+        }
+    }
+}

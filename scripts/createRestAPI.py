@@ -18,7 +18,7 @@
 #    under the License.
 
 import logging, json, requests
-requests.packages.urllib3.disable_warnings()
+#requests.packages.urllib3.disable_warnings()
 
 # Setup logging
 logger = logging.getLogger(__name__)
