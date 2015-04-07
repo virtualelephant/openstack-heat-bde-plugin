@@ -26,7 +26,7 @@
         "mesos_slave",
         "mesos_docker"
       ],
-      "instance_num" : 3,
+      "instance_num" : 5,
       "instance_type" : "MEDIUM",
       "ha" : "off"
     }
