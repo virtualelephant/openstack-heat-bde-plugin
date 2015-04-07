@@ -107,11 +107,11 @@ class BigDataExtensions(resource.Resource):
         prefix = 'https://'
         port = ':8443'
 
-        # hack
-        time.sleep(90)
+        # hack because of Heat sends call before NSX network is created/assigned
+        time.sleep(120)
 
         # determine actual NSX portgroup created
-        # hack
+        # hack - regex in Python is not a strength
         mob_string = '/mob/?moid=datacenter-2'
         curl_cmd = 'curl -k -u ' + bde_user + ':' + bde_pass + ' ' + prefix + vcm_server + mob_string
         grep_cmd = " | grep -oP '(?<=\(vxw).*(?=" + network + "\))'"
@@ -147,11 +147,39 @@ class BigDataExtensions(resource.Resource):
 
     def handle_suspend(self):
         # REST API call to shutdown an existing VMware BDE cluster
+        bde_server = self.properties.get(self.BDE_ENDPOINT)
+        bde_user = self.properties.get(self.USERNAME)
+        bde_pass = self.properties.get(self.PASSWORD)
+        name = self.properties.get(self.CLUSTER_NAME)
+        prefix = 'https://'
+        port = ':8443'
+        state = 'stop'
+
+        curr = self._open_connection()
+        header = {'content-type': 'application/json'}
+        api_call = '/serengeti/api/cluster/' + name + '?state=' + state
+        url = prefix + bde_server + port + api_call
+        r = curr.post(url, headers=header, verify=False)
+        logger.debug(_("[BDE Heat Plugin]: REST API stop cluster status code %s") % r.json)
 
         return
 
     def handle_resume(self):
         # REST API call to startup an existing VMware BDE cluster
+        bde_server = self.properties.get(self.BDE_ENDPOINT)
+        bde_user = self.properties.get(self.USERNAME)
+        bde_pass = self.properties.get(self.PASSWORD)
+        name = self.properties.get(self.CLUSTER_NAME)
+        prefix = 'https://'
+        port = ':8443'
+        state = 'start'
+
+        curr = self._open_connection()
+        header = {'content-type': 'application/json'}
+        api_call = '/serengeti/api/cluster/' + name + '?state=' + state
+        url = prefix + bde_server + port + api_call
+        r = curr.post(url, headers=header, verify=False)
+        logger.debug(_("[BDE Heat Plugin]: REST API start cluster status code %s") % r.json)
 
         return
 
@@ -160,31 +188,22 @@ class BigDataExtensions(resource.Resource):
         bde_server = self.properties.get(self.BDE_ENDPOINT)
         bde_user = self.properties.get(self.USERNAME)
         bde_pass = self.properties.get(self.PASSWORD)
-
         name = self.properties.get(self.CLUSTER_NAME)
-
-        # Authenticate - really need to write a separate subroutine for this
-        header = {'content-type': 'application/x-www-form-urlencoded'}
         prefix = 'https://'
         port = ':8443'
-        auth_string = "/serengeti/j_spring_security_check"
-        data = 'j_username=' + bde_user + '&j_password=' + bde_pass
 
-        s = requests.session()
-        url = prefix + bde_server + port + auth_string
-        r = s.post(url, data, headers=header, verify=False)
-        logger.debug(_("[BDE Heat Plugin]: Authentication status %s") % r.json)
+        # Authenticate - really need to write a separate subroutine for this
+        curr = self._open_connection()
 
         header = {'content-type': 'application/json'}
         api_call = '/serengeti/api/cluster/' + name
         url = prefix + bde_server + port + api_call
-        r = s.delete(url, headers=header, verify=False)
+        r = curr.delete(url, headers=header, verify=False)
         logger.debug(_("[BDE Heat Plugin]: REST API DELETE call status code %s") % r.json)
 
         # Need error-checking against status code
 
         # Terminate session
-
         return
 
 def resource_mapping():
