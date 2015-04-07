@@ -1,5 +1,4 @@
-# Virtual Elephant OpenStack Heat Resource Plugin
-# for VMware Big Data Extensions
+# Virtual Elephant OpenStack Heat Resource Plugin for VMware Big Data Extensions
 
 An OpenStack Heat resource plugin for integrating VMware Big Data Extensions. Allows dynamic deployment of Hadoop, Apache Mesos, Apache Spark, Apache Cassandra, Apache Kafka and other cluster deployments into an OpenStack environment using OpenStack Heat templates (JSON or YAML). Allows for the private cloud architect to offer Platform-as-a-Service offerings within their OpenStack environment using the OpenStack REST API to their end-users.
 
