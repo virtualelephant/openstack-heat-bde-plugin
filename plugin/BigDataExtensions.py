@@ -87,11 +87,17 @@ class BigDataExtensions(resource.Resource):
         s = requests.session()
         url = prefix + bde_server + port + auth_string
         r = s.post(url, data, headers=header, verify=False)
-        logger.debug(_("[BDE Heat Plugin]: Authentication status code %s") % r.json)
+        logger.info(_("VirtualElephant::VMware::BDE - Authentication status code %s") % r.json)
 
         return s
 
     def _close_connection(self):
+        bde_server = self.properties.get(self.BDE_ENDPOINT)
+        header = {'content-type': 'application/x-www-form-urlencoded'}
+        url = 'https://' + bde_server + ':8443/serengeti/j_spring_security_logout'
+        s = requests.session()
+        r = s.post(url, headers=header, verify=False)
+        logger.info(_("VirtualElephant::VMware::BDE - Log out status code %s") % r.json)
     
         return
 
@@ -108,7 +114,7 @@ class BigDataExtensions(resource.Resource):
         port = ':8443'
 
         # hack because of Heat sends call before NSX network is created/assigned
-        time.sleep(120)
+        #time.sleep(120)
 
         # determine actual NSX portgroup created
         # hack - regex in Python is not a strength
@@ -140,24 +146,21 @@ class BigDataExtensions(resource.Resource):
         url = prefix + bde_server + port + api_call
         r = curr.get(url, headers=header, verify=False)
 
-        # Some sort of if statement and skip next section if network exists
         # Add new network to BDE as an available network if check fails
         payload = {"name" : network, "portGroup" : network_id, "isDhcp" : "true"}
         api_call = '/serengeti/api/networks'
         url = prefix + bde_server + port + api_call
         r = curr.post(url, data=json.dumps(payload), headers=header, verify=False)
-        logger.debug(_("[BDE Heat Plugin]: REST API NETWORK call status code %s") % r.json)
+        logger.info(_("VirtualElephant::VMware::BDE - Network creation status code %s") % r.json)
 
-        # Send the cluster REST API call
+        # Send the create cluster REST API call
         payload = {"name": name, "distro": distro, "networkConfig": { "MGT_NETWORK": [network]}}
         api_call = '/serengeti/api/clusters'
         url = prefix + bde_server + port + api_call
         r = curr.post(url, data=json.dumps(payload), headers=header, verify=False)
-        logger.debug(_("[BDE Heat Plugin]: REST API CREATE call status code %s") % r.json)
+        logger.info(_("VirtualElephant::VMware::BDE - Create cluster status code %s") % r.json)
 
-        # Need error-checking aganist status code
-
-        # Terminate session
+        term = self._close_connection()
         return
 
     def handle_suspend(self):
@@ -175,8 +178,9 @@ class BigDataExtensions(resource.Resource):
         api_call = '/serengeti/api/cluster/' + name + '?state=' + state
         url = prefix + bde_server + port + api_call
         r = curr.post(url, headers=header, verify=False)
-        logger.debug(_("[BDE Heat Plugin]: REST API stop cluster status code %s") % r.json)
+        logger.info(_("VirtualElephant::VMware::BDE - Stop cluster status code %s") % r.json)
 
+        term = self._close_connection()
         return
 
     def handle_resume(self):
@@ -194,8 +198,9 @@ class BigDataExtensions(resource.Resource):
         api_call = '/serengeti/api/cluster/' + name + '?state=' + state
         url = prefix + bde_server + port + api_call
         r = curr.post(url, headers=header, verify=False)
-        logger.debug(_("[BDE Heat Plugin]: REST API start cluster status code %s") % r.json)
+        logger.info(_("VirtualElephant::VMware::BDE - Start cluster status code %s") % r.json)
 
+        term = self._close_connection()
         return
 
     def handle_delete(self):
@@ -207,20 +212,14 @@ class BigDataExtensions(resource.Resource):
         prefix = 'https://'
         port = ':8443'
 
-        # Authenticate - really need to write a separate subroutine for this
         curr = self._open_connection()
-
         header = {'content-type': 'application/json'}
         api_call = '/serengeti/api/cluster/' + name
         url = prefix + bde_server + port + api_call
         r = curr.delete(url, headers=header, verify=False)
-        logger.debug(_("[BDE Heat Plugin]: REST API DELETE call status code %s") % r.json)
+        logger.info(_("VirtualElephant::VMware::BDE - Delete cluster status code %s") % r.json)
 
-        # Should probably delete the network entry as well
-
-        # Need error-checking against status code
-
-        # Terminate session
+        term = self._close_connection()
         return
 
 def resource_mapping():
