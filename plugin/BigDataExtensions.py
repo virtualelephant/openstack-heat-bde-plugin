@@ -114,19 +114,34 @@ class BigDataExtensions(resource.Resource):
         # hack - regex in Python is not a strength
         mob_string = '/mob/?moid=datacenter-2'
         curl_cmd = 'curl -k -u ' + bde_user + ':' + bde_pass + ' ' + prefix + vcm_server + mob_string
-        grep_cmd = " | grep -oP '(?<=\(vxw).*(?=" + network + "\))'"
-        #awk_cmd = " | awk '{print \"vxw\" $0 \"" + network + "\"}'"
-        awk_cmd = " | awk '{split($0,uid,\")\"); print \"vxw\" uid[1]}'"
+        grep_cmd = " | grep -oP '(?<=\(vxw).*(?=" + network + "\))' | grep -oE '[^\(]+$'"
+        awk_cmd = " | awk '{print $0 \"" + network + "\"}'"
         full_cmd = curl_cmd + grep_cmd + awk_cmd
 
         p = subprocess.Popen(full_cmd, stdout=subprocess.PIPE, shell=True)
-        (network_id, err) = p.communicate()
+        (net_uid, err) = p.communicate()
+
+        # Check to see if network_id is as we expect it
+        if 'vxw' in net_uid:
+            network_id = net_uid
+        else:
+            network_id = "vxw" + net_uid
+
+        network_id = network_id.rstrip('\n')
 
         # Authenticate in a requests.session to the BDE server
         curr = self._open_connection()
 
-        # new network has to be added to BDE as an available network
+        # Should check to see if network already exists as available network
+        # This logs a big fat error message in /opt/serengeti/logs/serengeti.log
+        # when the network doesn't exist.
         header = {'content-type': 'application/json'}
+        api_call = '/serengeti/api/network/' + network
+        url = prefix + bde_server + port + api_call
+        r = curr.get(url, headers=header, verify=False)
+
+        # Some sort of if statement and skip next section if network exists
+        # Add new network to BDE as an available network if check fails
         payload = {"name" : network, "portGroup" : network_id, "isDhcp" : "true"}
         api_call = '/serengeti/api/networks'
         url = prefix + bde_server + port + api_call
@@ -134,7 +149,7 @@ class BigDataExtensions(resource.Resource):
         logger.debug(_("[BDE Heat Plugin]: REST API NETWORK call status code %s") % r.json)
 
         # Send the cluster REST API call
-        payload = {"name": name, "distro": distro, "networkConfig": { "MGT_NETWORK": [network_id]}}
+        payload = {"name": name, "distro": distro, "networkConfig": { "MGT_NETWORK": [network]}}
         api_call = '/serengeti/api/clusters'
         url = prefix + bde_server + port + api_call
         r = curr.post(url, data=json.dumps(payload), headers=header, verify=False)
@@ -200,6 +215,8 @@ class BigDataExtensions(resource.Resource):
         url = prefix + bde_server + port + api_call
         r = curr.delete(url, headers=header, verify=False)
         logger.debug(_("[BDE Heat Plugin]: REST API DELETE call status code %s") % r.json)
+
+        # Should probably delete the network entry as well
 
         # Need error-checking against status code
 

@@ -44,7 +44,8 @@
             "Type" : "OS::Neutron::Port",
             "Properties" : {
                 "admin_state_up" : "True",
-                "network_id" : { "Ref" : "mesos_network_01" }
+                "network_id" : { "Ref" : "mesos_network_01" },
+                "security_groups" : ["bde_security"]
             }
         },
         "instance0_floatingip" : {
@@ -60,6 +61,7 @@
                 "name" : "mesos-instance-01",
                 "image" : "02420cbe-72c3-41e5-9836-89456c29414c",
                 "flavor" : "m1.small",
+                "key_name" : "cmutchler-desktop",
                 "networks" : [{
                     "port" : { "Ref" : "instance0_port0" }
                 }]
@@ -72,7 +74,7 @@
                 "vcm_server" : "vcm1.atom.ut1.cpt.adobe.net",
                 "username" : "administrator@vsphere.local",
                 "password" : "SpringBokJ#9",
-                "cluster_name" : "mesos_heat_api_02",
+                "cluster_name" : "mesosphere_stack_01",
                 "cluster_type" : "mesos",
                 "cluster_net" : { "Ref" : "mesos_network_01" }
             }
