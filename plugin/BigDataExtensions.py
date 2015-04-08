@@ -28,10 +28,10 @@ class BigDataExtensions(resource.Resource):
 
     PROPERTIES = (
         BDE_ENDPOINT, VCM_SERVER, USERNAME, PASSWORD,
-        CLUSTER_NAME, CLUSTER_TYPE, CLUSTER_NET, CLUSTER_PASSWORD
+        CLUSTER_NAME, CLUSTER_TYPE, CLUSTER_NET, CLUSTER_PASSWORD, CLUSTER_RP
     ) = (
         'bde_endpoint', 'vcm_server', 'username', 'password',
-        'cluster_name', 'cluster_type', 'cluster_net', 'cluster_password'
+        'cluster_name', 'cluster_type', 'cluster_net', 'cluster_password', 'cluster_rp'
     )
 
     properties_schema = {
@@ -70,6 +70,11 @@ class BigDataExtensions(resource.Resource):
         CLUSTER_PASSWORD: properties.Schema(
             properties.Schema.STRING,
             required=False
+        ),
+        CLUSTER_RP: properties.Schema(
+            properties.Schema.STRING,
+            required=True,
+            default='openstackRP'
         )
     }
 
@@ -110,11 +115,12 @@ class BigDataExtensions(resource.Resource):
         distro = self.properties.get(self.CLUSTER_TYPE)
         name = self.properties.get(self.CLUSTER_NAME)
         network = self.properties.get(self.CLUSTER_NET)
+        rp = self.properties.get(self.CLUSTER_RP)
         prefix = 'https://'
         port = ':8443'
 
         # hack because of Heat sends call before NSX network is created/assigned
-        #time.sleep(120)
+        time.sleep(30)
 
         # determine actual NSX portgroup created
         # hack - regex in Python is not a strength
@@ -154,7 +160,7 @@ class BigDataExtensions(resource.Resource):
         logger.info(_("VirtualElephant::VMware::BDE - Network creation status code %s") % r.json)
 
         # Send the create cluster REST API call
-        payload = {"name": name, "distro": distro, "networkConfig": { "MGT_NETWORK": [network]}}
+        payload = {"name": name, "distro": distro, "rpNames": [rp],  "networkConfig": { "MGT_NETWORK": [network]}}
         api_call = '/serengeti/api/clusters'
         url = prefix + bde_server + port + api_call
         r = curr.post(url, data=json.dumps(payload), headers=header, verify=False)
