@@ -70,10 +70,10 @@
         "Mesosphere-Cell-0" : {
             "Type" : "VirtualElephant::VMware::BDE",
             "Properties" : {
-                "bde_endpoint" : "bde.atom.ut1.cpt.adobe.net",
-                "vcm_server" : "vcm1.atom.ut1.cpt.adobe.net",
+                "bde_endpoint" : "bde.localdomain",
+                "vcm_server" : "vcenter.localdomain",
                 "username" : "administrator@vsphere.local",
-                "password" : "SpringBokJ#9",
+                "password" : "password",
                 "cluster_name" : "mesosphere_stack_01",
                 "cluster_type" : "mesos",
                 "cluster_net" : { "Ref" : "mesos_network_01" }
