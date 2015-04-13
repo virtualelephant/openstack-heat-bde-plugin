@@ -68,3 +68,14 @@ print
 print r.headers
 print r.text
 #/DEBUG
+
+time.sleep(60)
+
+# Check and gather cluster information
+api_call = '/serengeti/api/cluster/' + clusterName
+url = prefix + bde_endpoint + port + api_call
+r = s.post(url, headers=header, verify=False)
+
+print r.json
+print r.headers
+print r.text

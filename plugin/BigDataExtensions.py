@@ -17,10 +17,19 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import time, json, base64, requests, subprocess
+import time
+import json
+import base64
+import requests
+import subprocess
+import pyVmomi
 
+from pyVim import connect
+from pyVim.connect import SmartConnect, Disconnect
+from pyVmomi import vmodl, vim
 from heat.engine import constraints, properties, resource
 from heat.openstack.common import log as logging
+from neutronclient.neutron import client
 
 logger = logging.getLogger(__name__)
 
@@ -28,10 +37,12 @@ class BigDataExtensions(resource.Resource):
 
     PROPERTIES = (
         BDE_ENDPOINT, VCM_SERVER, USERNAME, PASSWORD,
-        CLUSTER_NAME, CLUSTER_TYPE, CLUSTER_NET, CLUSTER_PASSWORD, CLUSTER_RP
+        CLUSTER_NAME, CLUSTER_TYPE, NETWORK, CLUSTER_PASSWORD, CLUSTER_RP,
+        VIO_CONFIG, BDE_CONFIG, SECURITY_GROUP, SUBNET
     ) = (
         'bde_endpoint', 'vcm_server', 'username', 'password',
-        'cluster_name', 'cluster_type', 'cluster_net', 'cluster_password', 'cluster_rp'
+        'cluster_name', 'cluster_type', 'network', 'cluster_password', 'cluster_rp',
+        'vio_config', 'bde_config', 'security_group', 'subnet'
     )
 
     properties_schema = {
@@ -63,7 +74,7 @@ class BigDataExtensions(resource.Resource):
             properties.Schema.STRING,
             required=True
         ),
-        CLUSTER_NET: properties.Schema(
+        NETWORK: properties.Schema(
             properties.Schema.STRING,
             required=True
         ),
@@ -75,6 +86,25 @@ class BigDataExtensions(resource.Resource):
             properties.Schema.STRING,
             required=True,
             default='openstackRP'
+        ),
+        VIO_CONFIG: properties.Schema(
+            properties.Schema.STRING,
+            required=True,
+            default='/usr/local/bin/etc/vio.config'
+        ),
+        BDE_CONFIG: properties.Schema(
+            properties.Schema.STRING,
+            required=False,
+            default='/usr/local/bin/etc/bde.config'
+        ),
+        SECURITY_GROUP: properties.Schema(
+            properties.Schema.STRING,
+            required=False,
+            default='dbe5cbe5-1590-4235-9b99-3c9a80c136ba'
+        ),
+        SUBNET: properties.Schema(
+            properties.Schema.STRING,
+            required=True
         )
     }
 
@@ -106,6 +136,121 @@ class BigDataExtensions(resource.Resource):
     
         return
 
+    def _create_nsx_ports(self):
+        # Load VIO environment variables from /usr/local/etc/vio.config
+        in_file = "/usr/local/etc/vio.config"
+        f = open(in_file, "ro")
+        for line in f:
+            if "OS_AUTH_URL" in line:
+                trash, os_auth_url = map(str, line.split("="))
+                os_auth_url = os_auth_url.rstrip('\n')
+                logger.info(_("VirtualElephant::VMware::BDE - DEBUG os_auth_url %s") % os_auth_url)
+            elif "OS_TENANT_ID" in line:
+                trash, os_tenant_id = map(str,line.split("="))
+                os_tenant_id = os_tenant_id.rstrip('\n')
+            elif "OS_TENANT_NAME" in line:
+                trash, os_tenant_name = map(str, line.split("="))
+                os_tenant_name = os_tenant_name.rstrip('\n')
+            elif "OS_USERNAME" in line:
+                trash, os_username = map(str, line.split("="))
+                os_username = os_username.rstrip('\n')
+            elif "OS_PASSWORD" in line:
+                trash, os_password = map(str, line.split("="))
+                os_password = os_password.rstrip('\n')
+            elif "OS_URL" in line:
+                trash, os_url = map(str, line.split("="))
+                os_url = os_url.rstrip('\n')
+            elif "OS_TOKEN" in line:
+                trash, os_token = map(str, line.split("="))
+                os_token = os_token.rstrip('\n')
+
+        d = {}
+        d['username'] = os_username
+        d['password'] = os_password
+        d['auth_url'] = os_auth_url
+        d['tenant_name'] = os_tenant_name
+        d['token'] = os_token
+        d['url'] = os_url
+
+        logger.info(_("VirtualElephant::VMware::BDE - Loaded VIO credentials - %s") % d)
+
+        # Using BDE API and vSphere API return the MAC address
+        # for the virtual machines created by BDE.
+        bde_server = self.properties.get(self.BDE_ENDPOINT)
+        vcm_server = self.properties.get(self.VCM_SERVER)
+        admin_user = self.properties.get(self.USERNAME)
+        admin_pass = self.properties.get(self.PASSWORD)
+        cluster_name = self.properties.get(self.CLUSTER_NAME)
+        network_id = self.properties.get(self.NETWORK)
+        security_group = self.properties.get(self.SECURITY_GROUP)
+
+        prefix = 'https://'
+        port = ':8443'
+
+        logger.info(_("VirtualElephant::VMware::BDE - Creating NSX ports for network %s") % network_id)
+
+        # Get the node names for the cluster from BDE
+        curr = self._open_connection()
+        header = {'content-type': 'application/json'}
+        api_call = '/serengeti/api/cluster/' + cluster_name
+        url = prefix + bde_server + port + api_call
+        r = curr.get(url, headers=header, verify=False)
+        raw_json = json.loads(r.text)
+        cluster_data = raw_json["nodeGroups"]
+
+        # Open connect to the vSphere API
+        si = SmartConnect(host=vcm_server, user=admin_user, pwd=admin_pass, port=443)
+        search_index = si.content.searchIndex
+        root_folder = si.content.rootFolder
+        for ng in cluster_data:
+            nodes = ng["instances"]
+            for node in nodes:
+                vm_name = node.get("name")
+                vm_moId = node.get("moId")
+                port_name = vm_name + "-port0"
+                
+                # moId is not in format we need to match
+                (x,y,z) = vm_moId.split(":")
+                vm_moId = "'vim." + y + ":" + z + "'"
+
+                # Go through each DC one at a time, in case there are multiple in vCenter
+                for dc in root_folder.childEntity:
+                    content = si.content
+                    objView = content.viewManager.CreateContainerView(dc, [vim.VirtualMachine], True)
+                    vm_list = objView.view
+                    objView.Destroy()
+                    
+                    for instance in vm_list:
+                        # convert object to string so we can search
+                        i = str(instance.summary.vm)
+                        if vm_moId in i:
+                            # Matched the VM in BDE and vCenter
+                            for device in instance.config.hardware.device:
+                                if isinstance(device, vim.vm.device.VirtualEthernetCard):
+                                    mac_address = str(device.macAddress)
+
+                # Create a new port through Neutron
+                neutron = client.Client('2.0',
+                                        username=os_username,
+                                        password=os_password,
+                                        auth_url=os_auth_url,
+                                        tenant_name=os_tenant_name,
+                                        endpoint_url=os_url,
+                                        token=os_token)
+                port_info = {
+                                "port": {
+                                        "admin_state_up": True,
+                                        "device_id": vm_name,
+                                        "name": port_name,
+                                        "mac_address": mac_address,
+                                        "security_groups": security_group,
+                                        "network_id": network_id
+                                }
+                            }
+                response = neutron.create_port(body=port_info)
+                logger.info(_("VirtualElephant::VMware::BDE - NSX port creation response - %s") % response)
+        return
+
     def handle_create(self):
         # REST API call to create a new VMware BDE cluster
         bde_server = self.properties.get(self.BDE_ENDPOINT)
@@ -113,14 +258,14 @@ class BigDataExtensions(resource.Resource):
         bde_user = self.properties.get(self.USERNAME)
         bde_pass = self.properties.get(self.PASSWORD)
         distro = self.properties.get(self.CLUSTER_TYPE)
-        name = self.properties.get(self.CLUSTER_NAME)
-        network = self.properties.get(self.CLUSTER_NET)
+        clusterName = self.properties.get(self.CLUSTER_NAME)
+        network = self.properties.get(self.NETWORK)
         rp = self.properties.get(self.CLUSTER_RP)
         prefix = 'https://'
         port = ':8443'
 
         # hack because of Heat sends call before NSX network is created/assigned
-        time.sleep(30)
+        #time.sleep(60)
 
         # determine actual NSX portgroup created
         # hack - regex in Python is not a strength
@@ -160,11 +305,18 @@ class BigDataExtensions(resource.Resource):
         logger.info(_("VirtualElephant::VMware::BDE - Network creation status code %s") % r.json)
 
         # Send the create cluster REST API call
-        payload = {"name": name, "distro": distro, "rpNames": [rp],  "networkConfig": { "MGT_NETWORK": [network]}}
+        payload = {"name": clusterName, "distro": distro, "rpNames": [rp],  "networkConfig": { "MGT_NETWORK": [network]}}
         api_call = '/serengeti/api/clusters'
         url = prefix + bde_server + port + api_call
         r = curr.post(url, data=json.dumps(payload), headers=header, verify=False)
         logger.info(_("VirtualElephant::VMware::BDE - Create cluster status code %s") % r.json)
+
+        # Arbitrary sleep value to allow for the nodes to be cloned
+        sleep = 60
+        logger.info(_("VirtualElephant::VMware::BDE - Sleeping for %s seconds BDE to create nodes") % sleep)
+        time.sleep(sleep)
+        # Create ports for the BDE nodes on the NSX logical router
+        nsx = self._create_nsx_ports()
 
         term = self._close_connection()
         return
@@ -224,6 +376,8 @@ class BigDataExtensions(resource.Resource):
         url = prefix + bde_server + port + api_call
         r = curr.delete(url, headers=header, verify=False)
         logger.info(_("VirtualElephant::VMware::BDE - Delete cluster status code %s") % r.json)
+
+        # Need to delete the NSX ports for clean-up
 
         term = self._close_connection()
         return
