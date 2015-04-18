@@ -100,7 +100,7 @@ class BigDataExtensions(resource.Resource):
         SECURITY_GROUP: properties.Schema(
             properties.Schema.STRING,
             required=False,
-            default='dbe5cbe5-1590-4235-9b99-3c9a80c136ba'
+            default='9d3ecec8-e0e3-4088-8c71-8c35cd67dd8b'
         ),
         SUBNET: properties.Schema(
             properties.Schema.STRING,
@@ -205,6 +205,7 @@ class BigDataExtensions(resource.Resource):
         for ng in cluster_data:
             nodes = ng["instances"]
             for node in nodes:
+                logger.info(_("VirtualElephant::VMware::BDE - Creating NSX port for %s") % node.get("name"))
                 vm_name = node.get("name")
                 vm_moId = node.get("moId")
                 port_name = vm_name + "-port0"
@@ -225,9 +226,26 @@ class BigDataExtensions(resource.Resource):
                         i = str(instance.summary.vm)
                         if vm_moId in i:
                             # Matched the VM in BDE and vCenter
+                            logger.info(_("VirtualElephant::VMware::BDE - Match found for BDE node %s") % instance)
                             for device in instance.config.hardware.device:
                                 if isinstance(device, vim.vm.device.VirtualEthernetCard):
                                     mac_address = str(device.macAddress)
+                                    logger.info(_("VirtualElephant::VMware::BDE - Found MAC address %s") % mac_address)
+
+                        # If the node is already trying to get an IP address,
+                        # then a powercycle is required.
+                        #logger.info(_("VirtualElephant::VMware::BDE - Powercycling the node %s") % node.get("name"))
+                        #if instance.runtime.powerState == vim.VirtualMachinePowerState.poweredOn:
+                        #    task = instance.PowerOff()
+                        #    while task.info.state not in [vim.TaskInfo.State.success,
+                        #                                  vim.TaskInfo.State.error]:
+                        #        logger.info(_("VirtualElephant::VMware::BDE - Waiting for node power off %s") % node.get("name"))
+                        #        time.sleep(5)
+                        #    task = instance.PowerOn()
+                        #    while task.info.state not in [vim.TaskInfo.State.success,
+                        #                                  vim.TaskInfo.State.error]:
+                        #        logger.info(_("VirtualElephant::VMware::BDE - Waiting for node power on %s") % node.get("name"))
+                        #        time.sleep(5)
 
                 # Create a new port through Neutron
                 neutron = client.Client('2.0',
@@ -243,10 +261,11 @@ class BigDataExtensions(resource.Resource):
                                         "device_id": vm_name,
                                         "name": port_name,
                                         "mac_address": mac_address,
-                                        "security_groups": security_group,
                                         "network_id": network_id
                                 }
                             }
+                logger.info(_("VirtualElephant::VMware::BDE - Neutron port string %s") % port_info)
+
                 response = neutron.create_port(body=port_info)
                 logger.info(_("VirtualElephant::VMware::BDE - NSX port creation response - %s") % response)
         return
@@ -312,7 +331,7 @@ class BigDataExtensions(resource.Resource):
         logger.info(_("VirtualElephant::VMware::BDE - Create cluster status code %s") % r.json)
 
         # Arbitrary sleep value to allow for the nodes to be cloned
-        sleep = 60
+        sleep = 180
         logger.info(_("VirtualElephant::VMware::BDE - Sleeping for %s seconds BDE to create nodes") % sleep)
         time.sleep(sleep)
         # Create ports for the BDE nodes on the NSX logical router
